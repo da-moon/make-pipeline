@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+
+# adds python3 shebang if a file does not have it
+function add_shebang(){
+    targets=($(find $PWD -name "*.py")); 
+    local -r shebang='#!/usr/bin/env python3'
+    for name in "${targets[@]}";do 
+        local cond=$(grep -xF "$shebang" "$name")
+        chmod +x "$name"
+        if [[ ! "$cond" ]]; then
+            echo "$shebang" | cat - "$name" > "$name"-temp && mv "$name"-temp "$name"
+        fi 
+    done
+}
+if [ -z "${BASH_SOURCE+x}" ]; then
+    add_shebang 
+    exit $?
+else
+    if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+        add_shebang 
+        exit $?
+    else
+        export -f add_shebang 
+    fi
+fi
+
