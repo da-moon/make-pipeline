@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+
+function generate_functions_synopsis() {
+    root="$1"; \
+    sink="$2"; \
+    cat "$sink" > "${sink%.*}.bac" ; \
+    echo -e "## functions-synopsis \n" > "$sink"; \
+    find "$root" -type f \
+    -a -name *.go \
+    -a -not -name *_test.go \
+    -a -not -name *.pb.go | while read file; do \
+    IFS=$'\n'; \
+    targets=($(grep -noP '(?<=func ).*?(?= \{)' "$file")); \
+    for line in "${targets[@]}";do \
+    number=$(echo "$line"|cut -d: -f1) ; \
+    signature=$(echo "$line"|cut -d: -f2) ; \
+    echo  "- \`$signature\`" >> "$sink"; \
+    echo  "   - [  file path  ] : \`$file\`">> "$sink"; \
+    echo  "   - [ line number ] : \`$number\`" >> "$sink"; \
+    echo  "   - [   synopsis  ] :" >> "$sink"; \
+    done; \
+    unset IFS; \
+    done;
+}
+if [ -z "${BASH_SOURCE+x}" ]; then
+    generate_functions_synopsis "$@"
+    exit $?
+else
+    if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+        generate_functions_synopsis "$@"
+        exit $?
+    else
+        export -f generate_functions_synopsis 
+    fi
+fi
