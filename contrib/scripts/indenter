@@ -1,0 +1,100 @@
+#!/usr/bin/env bash
+set -o errtrace
+set -o functrace
+set -o nounset
+set -o pipefail
+export PS4='+(${BASH_SOURCE}:${LINENO}): ${FUNCNAME[0]:+${FUNCNAME[0]}(): }'
+
+function unique_id() {
+    local length
+    local result
+    length="$1"
+    result="$(head /dev/urandom | tr -dc A-Za-z0-9 | head -c "$length")"
+    echo "$result"
+}
+export -f unique_id
+function repeat_substr() {
+	local -r str="$1"
+	local -r num="$2"
+    if [[ "$num" -eq 0 ]];then
+        echo "$str"
+        else
+        printf "%0.s$str" $(seq 1 $num)
+    fi
+}
+function count_occurrences_of_needle_in_haystack() {
+    local needle=$1
+    local haystack=$2
+    if [[ -z "$needle" ]]; then
+        echo "needle cannot be empty"
+        exit 1
+    fi
+    if [[ -z "$haystack" ]]; then
+        echo "needle cannot be empty"
+        exit 1
+    fi
+
+    echo "$haystack" | grep -Fo "$needle" | wc -l
+}
+function indent(){
+    local -r target="$1"
+    if [[ -z "$target" ]]; then
+        echo "target file cannot be empty"
+        exit 1
+    fi
+    local -r indent_character='\t'
+    local -r run_id=$(unique_id 5)
+    local -r open_needles=("{" "(" "[")
+    local -r close_needles=("}" ")" "]")
+    # cleaning empty lines
+    sed -i '/^$/d' "$target"
+    # removing indentations
+    sed -i 's/^[ \t]*//' "$target" 
+    local indent_level=0
+    local counter=0 
+    while read line; do
+        local open_counter=0
+        local close_counter=0
+        for i in "${open_needles[@]}"; do
+            local tmp=$(count_occurrences_of_needle_in_haystack "$i" "$line")
+            open_counter=$(( open_counter + tmp))
+        done
+        for i in "${close_needles[@]}"; do
+            local tmp=$(count_occurrences_of_needle_in_haystack "$i" "$line")
+            close_counter=$(( close_counter + tmp))
+        done
+        local nl_counter=$((open_counter - close_counter ))
+        if [[ $((open_counter - close_counter )) -eq -1 ]];then
+            if  ! [[ -f "/run/user/$UID/indenter-$run_id-close" ]]; then
+                touch "/run/user/$UID/indenter-$run_id-close"
+                indent_level=$((indent_level -1 ))
+            fi
+        else
+            if  [[ -f "/run/user/$UID/indenter-$run_id-close" ]]; then
+                rm "/run/user/$UID/indenter-$run_id-close"
+                indent_level=$((indent_level +1 ))
+            fi
+        fi
+        if [[ "$indent_level" -eq 0 ]];then
+            echo "$line" | tee -a "$target.ind"
+        else
+            local indented_string=$(repeat_substr  "$indent_character" "$indent_level")
+            echo "$indented_string$line" | tee -a "$target.ind"
+        fi
+        indent_level=$((indent_level+nl_counter))
+    done < "$target"
+    rm -f "/run/user/$UID/indenter-$run_id-close"
+    mv "$target.ind" "$target"
+
+}
+if [ -z "${BASH_SOURCE+x}" ]; then
+    indent "${@}"
+    exit $?
+else
+    if [[ "${BASH_SOURCE[0]}" != "${0}" ]]; then
+        export -f indent
+    else
+        indent "${@}"
+        exit $?
+    fi
+fi
